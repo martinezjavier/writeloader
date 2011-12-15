@@ -1,7 +1,7 @@
 CC=arm-linux-gnueabi-gcc
 
 all:
-	$(CC) writeloader.c -o writeloader -lm 
- 
+	$(CC) writeloader.c -o writeloader -lm
+
 clean:
-	rm -f writeloader 
+	rm -f writeloader

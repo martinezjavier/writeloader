@@ -147,11 +147,11 @@ unsigned int nand_calculate_ecc(unsigned char *buf)
 
 void display_help(void)
 {
-	printf("Usage: " PROGRAM " -i INPUT_FILE -o OUTPUT_FILE\n"
-	       "Write a loader to NAND flash device and fills oob area with 1-bit Hamming ECC codes\n"
+	printf("Usage: " PROGRAM " -i INPUT_FILE -o MTD_DEVICE\n"
+	       "Write a loader to a NAND flash device and fills its oob area with 1-bit Hamming ECC codes\n"
 	       "\n"
 	       "  -i, --input         input file\n"
-	       "  -o, --output        output file\n"
+	       "  -o, --output        mtd device\n"
 	       "      --help          display this help and exit\n"
 	       "      --version       output version information and exit\n");
 	exit(0);
