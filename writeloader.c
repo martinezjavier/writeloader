@@ -3,6 +3,7 @@
  *
  *  Copyright (C) 2011 ISEE 2007, SL
  *  Author: Javier Martinez Canillas <martinez.javier@gmail.com>
+ *  Author: Agusti Fontquerni Gorchs <afontquerni@iseebcn.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2
