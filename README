@@ -1,0 +1,34 @@
+Pre-requisites
+==============
+
+ARM toolchain
+-------------
+
+In order to cross-compile this application you need an ARM toolchain. Make sure
+to add the compiler bin directory to the PATH environment variable. This can be
+automated by adding
+
+  export PATH=/path/to/toolchain/bin:$PATH
+
+to ~/.bashrc (when using the bash shell).
+
+Kernel Headers
+--------------
+
+To cross-compile the application against kernel headers from a kernel git tree
+you first need to pre-process the headers to make them usable in userspace. This
+can be done by running
+
+  make ARCH=arm headers_install
+
+in the kernel source directory. The headers will be installed in the
+usr/include/ subdirectory of your kernel sources.
+
+Compilation
+===========
+
+To compile the ARM software, run
+
+  make KDIR=/path/to/kernel/sources CROSS_COMPILE=arm-none-linux-gnueabi-
+
+This will create the writeloader binary for ARM.
