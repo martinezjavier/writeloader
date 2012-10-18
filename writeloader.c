@@ -38,6 +38,7 @@
 #include <dirent.h>
 
 #include <linux/types.h>
+#include <linux/version.h>
 #include "mtd/mtd-user.h"
 
 #include <fcntl.h>
@@ -336,8 +337,11 @@ int main(int argc, char *argv[])
 
 	if (flash_type == NAND) {
 		/* The device has to be accessed in RAW mode to fill oob area */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0)
 		res = ioctl(ofd, MTDFILEMODE, (void *) MTD_MODE_RAW);
-
+#else
+		res = ioctl(ofd, MTDFILEMODE, (void *) MTD_FILE_MODE_RAW);
+#endif
 		if (res) {
 			perror("RAW mode access");
 			ret = EXIT_FAILURE;
