@@ -60,6 +60,10 @@
 #define ODD_EIGHTH  0xaa
 #define ODD_WHOLE   0x00
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0)
+#define MTD_FILE_MODE_RAW MTD_MODE_RAW
+#endif
+
 char *input_file;
 char *output_file;
 
@@ -224,7 +228,7 @@ void process_options(int argc, char *argv[])
 		display_help();
 }
 
-int write_ecc(int ofd, unsigned char *ecc, int sector_cnt)
+int write_ecc(int ofd, unsigned char *ecc, int start)
 {
 	struct mtd_oob_buf oob;
 	unsigned char oobbuf[64];
@@ -235,7 +239,7 @@ int write_ecc(int ofd, unsigned char *ecc, int sector_cnt)
 	for (i = 0; i < 12; i++)
 		oobbuf[i + 2] = ecc[i];
 
-	oob.start = (sector_cnt - 1) * SECTOR_SIZE;
+	oob.start = start;
 	oob.ptr = oobbuf;
 	oob.length = 64;
 
@@ -260,162 +264,112 @@ int find_nand(void)
 {
 	DIR *dir;
 	struct dirent *ent;
+	int ret = -1;
 	dir = opendir(path);
 
 	if (dir == NULL) {
 		perror("Error opening /sys dir");
-		return EXIT_FAILURE;
+		goto out;
 	}
 
 	/* print all the files and directories within directory */
-	while ((ent = readdir(dir)) != NULL) {
+	while ((ent = readdir(dir)) != NULL && ret == -1) {
 		if (strstr(ent->d_name, "omap2-onenand"))
-			return ONENAND;
+			ret = ONENAND;
 		else if (strstr(ent->d_name, "omap2-nand"))
-			return NAND;
+			ret = NAND;
 	}
 
 	closedir(dir);
 
-	printf("Flash memory not found in /sys");
-	return -1;
+	if (ret == -1)
+		printf("Flash memory not found in /sys");
+out:
+	return ret;
 }
 
 int main(int argc, char *argv[])
 {
 	int fd;
 	int ofd;
-	unsigned char sector[SECTOR_SIZE];
 	unsigned char *page;
 	unsigned char code[3];
-	int res = 0;
-	int cnt = 0;
 	unsigned char ecc[12];
-	int i;
-	int sector_idx = 0;
-	int sector_cnt = 0;
-	int sector_bytes = 0;
-	int ecc_bytes = 0;
-	int ret = 0;
+	int cnt;
+	int i, j;
 	int len;
+	int page_idx = 0;
+	int ret = EXIT_FAILURE;
 
 	process_options(argc, argv);
 
 	flash_type = find_nand();
 
-	if (flash_type < 0) {
-		ret = EXIT_FAILURE;
+	if (flash_type < 0)
 		goto out;
-	}
 
-	if (flash_type == NAND)
-		len = PAGE_SIZE;
-	else
-		len = 2 * PAGE_SIZE;
+	len = PAGE_SIZE;
+	if (flash_type == ONENAND)
+		len *= 2;
 
-	page = (unsigned char *)malloc(len * sizeof(unsigned char));
-
+	page = (unsigned char *)malloc(len);
 	if (page == NULL) {
 		perror("Error opening input file");
-		ret = 1;
 		goto out;
 	}
 
 	fd = open(input_file, O_RDWR);
 	if (fd < 0) {
 		perror("Error opening input file");
-		ret = EXIT_FAILURE;
 		goto out_malloc;
 	}
 
 	ofd = open(output_file, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
 	if (fd < 0) {
 		perror("Error opening output file");
-		ret = EXIT_FAILURE;
 		goto out_input;
 	}
 
-	if (flash_type == NAND) {
+	if (flash_type == NAND)
 		/* The device has to be accessed in RAW mode to fill oob area */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0)
-		res = ioctl(ofd, MTDFILEMODE, (void *) MTD_MODE_RAW);
-#else
-		res = ioctl(ofd, MTDFILEMODE, (void *) MTD_FILE_MODE_RAW);
-#endif
-		if (res) {
+		if (ioctl(ofd, MTDFILEMODE, (void *) MTD_FILE_MODE_RAW)) {
 			perror("RAW mode access");
-			ret = EXIT_FAILURE;
 			goto out_input;
 		}
-	}
 
+	while ((cnt = read(fd, page, PAGE_SIZE)) > 0) {
+		/* Writes has to be page aligned */
+		if (cnt < PAGE_SIZE)
+			memset(page + cnt, 0xff, PAGE_SIZE - cnt);
 
-	if (flash_type == NAND)
-		memset(ecc, 0x00, 12);
+		if (flash_type == NAND)
+			for (i = 0; i < PAGE_SIZE / SECTOR_SIZE; i++) {
+				/* Obtain ECC code for sector */
+				ecc_sector(page + i * SECTOR_SIZE, code);
+				for (j = 0; j < 3; j++)
+					ecc[i * 3 + j] = code[j];
+			}
+		else
+			/* The OneNAND has a 2-plane memory but the ROM boot
+			 * can only access one of them, so we have to double
+			 * copy each 2K page. */
+			memcpy(page + PAGE_SIZE, page, PAGE_SIZE);
 
-	memset(page, 0xff, len);
-	memset(sector, 0xff, SECTOR_SIZE);
-
-	while ((cnt = read(fd, sector, SECTOR_SIZE)) > 0) {
-
-		/* Writes has to be sector aligned */
-		if (cnt < SECTOR_SIZE)
-			memset(sector + cnt, 0xff, SECTOR_SIZE - cnt);
-
-		sector_bytes += SECTOR_SIZE;
-
-		if (flash_type == NAND) {
-			memset(code, 0x00, 3);
-			/* Obtain ECC code for sector */
-			ecc_sector(sector, code);
-			for (i = 0; i < 3; i++)
-				ecc[sector_idx * 3 + i] = code[i];
+		if (write(ofd, page, len) != len) {
+			perror("Error writing to output file");
+			goto out_output;
 		}
 
-		memcpy(page + sector_idx * SECTOR_SIZE, sector, SECTOR_SIZE);
-
-		sector_idx++;
-		sector_cnt++;
-
-		/* After reading a complete page each PAGE
-		   write the data and the oob area. */
-		if (sector_idx == PAGE_SIZE / SECTOR_SIZE ||
-		    cnt < SECTOR_SIZE) {
-
-			/* The OneNAND has a 2-plane memory but the ROM boot
-			   can only access one of them, so we have to double
-			   copy each 2K page. */
-			if (flash_type == ONENAND)
-				memcpy(page + PAGE_SIZE, page, PAGE_SIZE);
-
-			if (write(ofd, page, len) != len) {
-				perror("Error writing to output file");
-				ret = EXIT_FAILURE;
+		if (flash_type == NAND)
+			if (write_ecc(ofd, ecc, page_idx * PAGE_SIZE)) {
+				perror("Error writing ECC in OOB area");
 				goto out_output;
 			}
-
-			memset(page, 0xff, len);
-
-			if (flash_type == NAND)
-				if (write_ecc(ofd, ecc, sector_cnt)) {
-					perror("Error writing ECC in OOB area");
-					ret = 1;
-					goto out_output;
-				}
-
-			if (flash_type == NAND) {
-				ecc_bytes += 64;
-				memset(ecc, 0x00, 12);
-			}
-
-			sector_idx = 0;
-		}
-		memset(sector, 0xff, SECTOR_SIZE);
+		page_idx++;
 	}
 
 	if (cnt < 0) {
 		perror("File I/O error on input file");
-		ret = EXIT_FAILURE;
 		goto out_output;
 	}
 
@@ -429,5 +383,5 @@ out_input:
 out_malloc:
 	free(page);
 out:
-	exit(ret);
+	return ret;
 }
