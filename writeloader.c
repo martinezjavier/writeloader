@@ -64,6 +64,12 @@
 #define MTD_FILE_MODE_RAW MTD_MODE_RAW
 #endif
 
+#define _L1(n)  (((n) < 2)     ?      0 :  1)
+#define _L2(n)  (((n) < 1<<2)  ? _L1(n) :  2 + _L1((n)>>2))
+#define _L4(n)  (((n) < 1<<4)  ? _L2(n) :  4 + _L2((n)>>4))
+#define _L8(n)  (((n) < 1<<8)  ? _L4(n) :  8 + _L4((n)>>8))
+#define LOG2(n) (((n) < 1<<16) ? _L8(n) : 16 + _L8((n)>>16))
+
 char *input_file;
 char *output_file;
 
@@ -139,12 +145,12 @@ unsigned int nand_calculate_ecc(unsigned char *buf)
 	for (i = 0; i < SECTOR_SIZE; i++)
 		byte_parities[i] = calc_bitwise_parity(buf[i], EVEN_WHOLE);
 
-	for (i = 0; i < (int) log2(SECTOR_SIZE); i++) {
+	for (i = 0; i < LOG2(SECTOR_SIZE); i++) {
 		val = 0;
-		val = calc_row_parity_bits(byte_parities, 1, pow(2, i));
+		val = calc_row_parity_bits(byte_parities, 1, 1 << i);
 		even_result |= (val << (3 + i));
 
-		val = calc_row_parity_bits(byte_parities, 0, pow(2, i));
+		val = calc_row_parity_bits(byte_parities, 0, 1 << i);
 		odd_result |= (val << (3 + i));
 	}
 

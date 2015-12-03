@@ -3,10 +3,9 @@ KDIR ?=
 
 CC      := $(CROSS_COMPILE)gcc
 CFLAGS  := -O2 -W -Wall -I$(KDIR)/usr/include
-LIBS    := -lm
 
 all:
-	$(CC) $(CFLAGS) writeloader.c -o writeloader $(LIBS)
+	$(CC) $(CFLAGS) writeloader.c -o writeloader
 
 clean:
 	rm -f writeloader
