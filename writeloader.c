@@ -46,7 +46,7 @@
 #include <math.h>
 
 #define PROGRAM "writeloader"
-#define VERSION "version: 0.01"
+#define VERSION "version: 1.00"
 
 #define SECTOR_SIZE 512
 #define PAGE_SIZE   2048
