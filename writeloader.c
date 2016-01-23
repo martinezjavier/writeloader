@@ -46,7 +46,7 @@
 #include <math.h>
 
 #define PROGRAM "writeloader"
-#define VERSION "version: 0.01"
+#define VERSION "version: 1.00"
 
 #define SECTOR_SIZE 512
 #define PAGE_SIZE   2048
@@ -331,7 +331,7 @@ int main(int argc, char *argv[])
 	}
 
 	ofd = open(output_file, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
-	if (fd < 0) {
+	if (ofd < 0) {
 		perror("Error opening output file");
 		goto out_input;
 	}
