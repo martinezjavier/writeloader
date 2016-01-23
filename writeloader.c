@@ -331,7 +331,7 @@ int main(int argc, char *argv[])
 	}
 
 	ofd = open(output_file, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
-	if (fd < 0) {
+	if (ofd < 0) {
 		perror("Error opening output file");
 		goto out_input;
 	}
